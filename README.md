@@ -1,6 +1,6 @@
-# admirror-speedtest
+# bestbind
 
-(Old name: rsync-speedtest)
+(Old name: admirror-speedtest, rsync-speedtest)
 
 A simple speedtest program for multiple-IPs (ISP) environment, to optimize the speed of syncing from upstream. **Supports rsync, curl, wget and git**.
 
@@ -9,19 +9,19 @@ PS: There's a racing bug in rsync that prevents proper termination of rsync proc
 ## Args
 
 ```
-$ ./admirror-speedtest --help
-admirror-speedtest 0.3.3
+$ ./bestbind --help
+bestbind 0.4.0
 Test speed (bandwidth) of different bind IP to rsync, http(s) and git upstream. Alleviate mirror
 site admin's trouble choosing fastest bind IP.
 
 USAGE:
-    admirror-speedtest [OPTIONS] <UPSTREAM>
+    bestbind [OPTIONS] <UPSTREAM>
 
 ARGS:
     <UPSTREAM>    Upstream path. Will be given to specified program
 
 OPTIONS:
-    -c, --config <CONFIG>      Config file (IP list) path. Default to ~/.admirror-speedtest or (if
+    -c, --config <CONFIG>      Config file (IP list) path. Default to ~/.bestbind or (if
                                not exist) ~/.rsync-speedtest
     -h, --help                 Print help information
         --log <LOG>            Log file. Default to /dev/null
@@ -37,8 +37,8 @@ OPTIONS:
 
 `libbinder.so` will be searched by this order:
 
-- Same path as admirror-speedtest executable
-- `deps` directory in admirror-speedtest executable's parent directory
+- Same path as bestbind executable
+- `deps` directory in bestbind executable's parent directory
 
 Note that libbinder is now seperated to another repo: <https://github.com/taoky/libbinder>, with glibc & musl support.
 

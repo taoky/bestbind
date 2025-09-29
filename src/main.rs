@@ -14,7 +14,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use clap::{ValueEnum, Parser};
+use clap::{Parser, ValueEnum};
 use libc::SIGKILL;
 use signal_hook::consts::{SIGINT, SIGTERM};
 
@@ -31,7 +31,8 @@ pub enum Program {
 #[derive(Parser, Debug)]
 #[clap(about, version)]
 struct Args {
-    /// Config file (IP list) path. Default to ~/.admirror-speedtest or (if not exist) ~/.rsync-speedtest
+    /// Config file (IP list) path. Select order is ~/.bestbind, ~/.admirror-speedtest,
+    /// ~/.rsync-speedtest
     #[clap(short, long)]
     config: Option<String>,
 
@@ -60,7 +61,7 @@ struct Args {
     program: Option<Program>,
 
     /// Extra arguments. Will be given to specified program
-    #[clap(long, allow_hyphen_values=true)]
+    #[clap(long, allow_hyphen_values = true)]
     extra: Option<String>,
 }
 
@@ -220,18 +221,21 @@ fn main() {
 
     // 1. read IP list from args.config
     let mut ips: Vec<Ip> = Vec::new();
-    let config_path = args.config.clone().unwrap_or_else(|| {
+    let config_paths = if let Some(config) = args.config.clone() {
+        vec![config]
+    } else {
+        let mut paths = Vec::new();
+        let mut path = dirs::home_dir().unwrap();
+        path.push(".bestbind");
+        paths.push(path.to_str().unwrap().to_string());
         let mut path = dirs::home_dir().unwrap();
         path.push(".admirror-speedtest");
-        path.to_str().unwrap().to_string()
-    });
-    let mut config_paths = vec![config_path];
-    if args.config.is_none() {
-        // Add .rsync-speedtest for backward compatibility
+        paths.push(path.to_str().unwrap().to_string());
         let mut path = dirs::home_dir().unwrap();
         path.push(".rsync-speedtest");
-        config_paths.push(path.to_str().unwrap().to_string());
-    }
+        paths.push(path.to_str().unwrap().to_string());
+        paths
+    };
 
     let mut ips_file = None;
     for config in config_paths {
@@ -316,7 +320,7 @@ fn main() {
             Some(libpath) => libpath,
             None => {
                 panic!(
-                    r#"libbinder.so not found. Please put it in same folder of admirror-speedtest.
+                    r#"libbinder.so not found. Please put it in same folder of bestbind.
 You can download corresponding file from https://github.com/taoky/libbinder/releases"#
                 );
             }
