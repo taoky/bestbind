@@ -21,8 +21,7 @@ ARGS:
     <UPSTREAM>    Upstream path. Will be given to specified program
 
 OPTIONS:
-    -c, --config <CONFIG>      Config file (IP list) path. Default to ~/.bestbind or (if
-                               not exist) ~/.rsync-speedtest
+    -c, --config <CONFIG>      Config file (IP list) path. Default order: ~/.bestbind.conf or /etc/bestbind.conf
     -h, --help                 Print help information
         --log <LOG>            Log file. Default to /dev/null
     -p, --pass <PASS>          Passes number [default: 3]
