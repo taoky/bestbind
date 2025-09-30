@@ -40,7 +40,7 @@ impl<'de> Deserialize<'de> for Format {
     where
         D: serde::Deserializer<'de>,
     {
-        let s: &str = Deserialize::deserialize(deserializer)?;
+        let s: String = Deserialize::deserialize(deserializer)?;
         let s = s.to_lowercase();
         match s.as_str() {
             "ip" => Ok(Format::IP),
