@@ -19,6 +19,8 @@ mod ip;
 
 pub trait Handle {
     fn wait_timeout(&mut self, timeout: Duration, term: Arc<AtomicBool>) -> ProgramStatus;
+    fn child(&mut self) -> &mut ProgramChild;
+    fn kill_children(&mut self) -> ExitStatus;
 }
 
 pub trait FormatRunner {
@@ -103,10 +105,9 @@ fn get_program_args(
 }
 
 fn wait_timeout(
-    proc: &mut ProgramChild,
+    handle: &mut impl Handle,
     timeout: Duration,
     term: &Arc<AtomicBool>,
-    kill: fn(&mut ProgramChild) -> ExitStatus,
 ) -> crate::ProgramStatus {
     // Reference adaptable timeout algorithm from
     // https://github.com/hniksic/rust-subprocess/blob/5e89ac093f378bcfc03c69bdb1b4bcacf4313ce4/src/popen.rs#L778
@@ -118,7 +119,8 @@ fn wait_timeout(
     let mut delay = Duration::from_millis(1);
 
     loop {
-        let status = proc
+        let status = handle
+            .child()
             .child
             .try_wait()
             .expect("try waiting for child process failed");
@@ -131,14 +133,14 @@ fn wait_timeout(
 
         if term.load(Ordering::SeqCst) {
             let time = start.elapsed();
-            let status = kill(proc);
+            let status = handle.kill_children();
             return ProgramStatus { status, time };
         }
 
         let now = Instant::now();
         if now >= deadline {
             let time = start.elapsed();
-            let status = kill(proc);
+            let status = handle.kill_children();
             return ProgramStatus { status, time };
         }
 

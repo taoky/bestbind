@@ -110,66 +110,6 @@ fn reap_all_children() {
     }
 }
 
-fn kill_children(proc: &mut ProgramChild) -> ExitStatus {
-    // Soundness requirement: the latest try_wait() should return Ok(None)
-    // Elsewhere libc::kill may kill unrelated processes
-
-    // rsync process model: we spawn "generator", and after receiving "file list"
-    // generator spawns "receiver".
-    // A race condition bug of rsync will cause receiver to hang for a long time
-    // when both generator and receiver get SIGTERM/SIGINT/SIGHUP.
-    // (See https://github.com/WayneD/rsync/issues/413 I posted)
-    // So we seperate rsync from rsync-speedtest process group,
-    // and just SIGTERM "generator" here, and let generator to SIGUSR1 receiver
-    // and hoping that it will work
-    // and well, I think that std::process::Child really should get a terminate() method!
-
-    // git process model: git spawns some git-remote-https (for example) to do the networking work
-    // and when getting SIGTERM, etc., git will do cleanup job and we cannot get actual data afterwards
-    // So we have to kill the whole process group with the crudest way
-    if proc.program != Program::Git {
-        unsafe {
-            libc::kill(proc.child.id() as i32, SIGTERM);
-        }
-    } else {
-        unsafe {
-            // SIGKILL the whole process group to cleanup git-remote-*
-            libc::killpg(proc.child.id() as i32, SIGKILL);
-        }
-    }
-
-    // let res = proc.child.wait().expect("program wait() failed");
-    // Try waiting for 5 more seconds to let it cleanup
-    let mut res: Option<ExitStatus> = None;
-    for _ in 0..50 {
-        if let Some(status) = proc
-            .child
-            .try_wait()
-            .expect("try waiting for child process failed")
-        {
-            res = Some(status);
-            break;
-        }
-        std::thread::sleep(Duration::from_millis(100));
-    }
-    if res.is_none() {
-        // Still not exited, kill it
-        println!(
-            "Killing {} with SIGKILL, as it is not exiting with SIGTERM.",
-            get_program_name(proc.program)
-        );
-        unsafe {
-            libc::kill(proc.child.id() as i32, SIGKILL);
-        }
-        res = Some(proc.child.wait().expect("program wait() failed"));
-    }
-    // if receiver died before generator, the SIGCHLD handler of generator will help reap it
-    // but we cannot rely on race condition to help do things right
-    reap_all_children();
-
-    res.unwrap()
-}
-
 pub struct IPFormatRunner {
     uses: Vec<Target>,
     binder_path: Option<PathBuf>,
@@ -184,7 +124,72 @@ pub struct IPFormatHandle {
 
 impl Handle for IPFormatHandle {
     fn wait_timeout(&mut self, timeout: Duration, term: Arc<AtomicBool>) -> crate::ProgramStatus {
-        wait_timeout(&mut self.child, timeout, &term, kill_children)
+        wait_timeout(self, timeout, &term)
+    }
+
+    fn child(&mut self) -> &mut ProgramChild {
+        &mut self.child
+    }
+
+    fn kill_children(&mut self) -> ExitStatus {
+        // Soundness requirement: the latest try_wait() should return Ok(None)
+        // Elsewhere libc::kill may kill unrelated processes
+
+        // rsync process model: we spawn "generator", and after receiving "file list"
+        // generator spawns "receiver".
+        // A race condition bug of rsync will cause receiver to hang for a long time
+        // when both generator and receiver get SIGTERM/SIGINT/SIGHUP.
+        // (See https://github.com/WayneD/rsync/issues/413 I posted)
+        // So we seperate rsync from rsync-speedtest process group,
+        // and just SIGTERM "generator" here, and let generator to SIGUSR1 receiver
+        // and hoping that it will work
+        // and well, I think that std::process::Child really should get a terminate() method!
+
+        let proc = self.child();
+        // git process model: git spawns some git-remote-https (for example) to do the networking work
+        // and when getting SIGTERM, etc., git will do cleanup job and we cannot get actual data afterwards
+        // So we have to kill the whole process group with the crudest way
+        if proc.program != Program::Git {
+            unsafe {
+                libc::kill(proc.child.id() as i32, SIGTERM);
+            }
+        } else {
+            unsafe {
+                // SIGKILL the whole process group to cleanup git-remote-*
+                libc::killpg(proc.child.id() as i32, SIGKILL);
+            }
+        }
+
+        // let res = proc.child.wait().expect("program wait() failed");
+        // Try waiting for 5 more seconds to let it cleanup
+        let mut res: Option<ExitStatus> = None;
+        for _ in 0..50 {
+            if let Some(status) = proc
+                .child
+                .try_wait()
+                .expect("try waiting for child process failed")
+            {
+                res = Some(status);
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        if res.is_none() {
+            // Still not exited, kill it
+            println!(
+                "Killing {} with SIGKILL, as it is not exiting with SIGTERM.",
+                get_program_name(proc.program)
+            );
+            unsafe {
+                libc::kill(proc.child.id() as i32, SIGKILL);
+            }
+            res = Some(proc.child.wait().expect("program wait() failed"));
+        }
+        // if receiver died before generator, the SIGCHLD handler of generator will help reap it
+        // but we cannot rely on race condition to help do things right
+        reap_all_children();
+
+        res.unwrap()
     }
 }
 

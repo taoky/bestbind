@@ -6,6 +6,8 @@ use std::{
     time::Duration,
 };
 
+use rand::{distr::Alphanumeric, Rng};
+
 /// Run with docker, by specifying docker network
 use crate::{
     format::{get_program_args, wait_timeout, FormatRunner, FormatRunnerFactory, Handle},
@@ -14,6 +16,7 @@ use crate::{
 
 pub struct DockerFormatHandle {
     child: ProgramChild,
+    ctr_name: String,
 }
 pub struct DockerFormatRunner {
     docker: String,
@@ -23,19 +26,36 @@ pub struct DockerFormatRunner {
     upstream: String,
 }
 
-fn kill_container(child: &mut ProgramChild) -> ExitStatus {
-    let _ = std::process::Command::new("docker")
-        .args(["kill", &child.child.id().to_string()])
-        .status();
-    let _ = child.child.kill();
-    let _ = child.child.wait();
-
-    ExitStatus::from_raw(128 + libc::SIGKILL)
-}
-
 impl Handle for DockerFormatHandle {
     fn wait_timeout(&mut self, timeout: Duration, term: Arc<AtomicBool>) -> crate::ProgramStatus {
-        wait_timeout(&mut self.child, timeout, &term, kill_container)
+        wait_timeout(self, timeout, &term)
+    }
+
+    fn child(&mut self) -> &mut ProgramChild {
+        &mut self.child
+    }
+
+    fn kill_children(&mut self) -> ExitStatus {
+        self.child
+            .child
+            .kill()
+            .expect("Failed to kill child process");
+        self.child
+            .child
+            .wait()
+            .expect("Failed to wait child process");
+        let status = std::process::Command::new("docker")
+            .args(["kill", self.ctr_name.as_str()])
+            .status()
+            .expect("Failed to kill docker container");
+        assert!(
+            status.success(),
+            "Failed to kill docker container {}, exit code: {}",
+            self.ctr_name,
+            status.code().unwrap_or(-1)
+        );
+
+        ExitStatus::from_raw(128 + libc::SIGKILL)
     }
 }
 
@@ -48,8 +68,18 @@ impl FormatRunner for DockerFormatRunner {
 
     fn run(&self, target: &str, tmp_path: &mktemp::Temp, log: &File) -> Box<Self::HandleType> {
         let args = get_program_args(self.program, &self.extra, &self.upstream, tmp_path, None);
+        let ctr_name = format!(
+            "bestbind-{}",
+            rand::rng()
+                .sample_iter(&Alphanumeric)
+                .take(16)
+                .map(char::from)
+                .collect::<String>()
+        );
         let cmd = std::process::Command::new(&self.docker)
             .arg("run")
+            .arg("--name")
+            .arg(&ctr_name)
             .arg("--rm")
             .arg("--network")
             .arg(target)
@@ -67,6 +97,7 @@ impl FormatRunner for DockerFormatRunner {
                 child: cmd,
                 program: self.program,
             },
+            ctr_name,
         })
     }
 }
