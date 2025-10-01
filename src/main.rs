@@ -78,10 +78,14 @@ fn default_docker() -> String {
     "docker".to_string()
 }
 
+fn default_image() -> String {
+    "ghcr.io/taoky/bestbind-env:master".to_string()
+}
+
 #[derive(Debug, Deserialize, Clone)]
 struct Profile {
     format: Format,
-    #[serde(default)]
+    #[serde(default = "default_image")]
     image: String, // Docker image name, only used in Docker format
     #[serde(default = "default_docker")]
     docker: String, // The "Docker" command, default to "docker".
@@ -199,14 +203,7 @@ fn get_config_paths(args: &Args) -> Vec<PathBuf> {
 fn get_profile(args: &Args, config: &str) -> Result<Profile> {
     let profiles: HashMap<String, Profile> = toml::from_str(config)?;
     match profiles.get(&args.profile) {
-        Some(profile) => {
-            if profile.format == Format::Docker && profile.image.is_empty() {
-                return Err(anyhow::anyhow!(
-                    "Docker format requires 'image' field in profile"
-                ));
-            }
-            Ok(profile.clone())
-        }
+        Some(profile) => Ok(profile.clone()),
         None => Err(anyhow::anyhow!(
             "Profile '{}' not found in config file",
             args.profile

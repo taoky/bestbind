@@ -17,9 +17,11 @@ use crate::{
 pub struct DockerFormatHandle {
     child: ProgramChild,
     ctr_name: String,
+    docker: String,
 }
 pub struct DockerFormatRunner {
     docker: String,
+    image: String,
     uses: Vec<crate::Target>,
     extra: Vec<String>,
     program: Program,
@@ -44,7 +46,7 @@ impl Handle for DockerFormatHandle {
             .child
             .wait()
             .expect("Failed to wait child process");
-        let status = std::process::Command::new("docker")
+        let status = std::process::Command::new(&self.docker)
             .args(["kill", self.ctr_name.as_str()])
             .status()
             .expect("Failed to kill docker container");
@@ -85,6 +87,7 @@ impl FormatRunner for DockerFormatRunner {
             .arg(target)
             .arg("-v")
             .arg(format!("{}:/data", tmp_path.as_os_str().to_string_lossy()))
+            .arg(&self.image)
             .arg(self.program.to_string())
             .args(args)
             .stdout(log.try_clone().expect("Failed to clone log file"))
@@ -98,6 +101,7 @@ impl FormatRunner for DockerFormatRunner {
                 program: self.program,
             },
             ctr_name,
+            docker: self.docker.clone(),
         })
     }
 }
@@ -129,6 +133,7 @@ impl FormatRunnerFactory for DockerFormatRunner {
         }
         Box::new(Self {
             docker,
+            image: profile.image,
             uses,
             extra: args.extra.clone(),
             program,

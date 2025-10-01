@@ -7,7 +7,7 @@ format = "ip"
 
 [docker]
 format = "docker"
-image = "ghcr.io/taoky/bestbind-env:latest"
+image = "ghcr.io/taoky/bestbind-env:master"
 docker = "podman" # Optional, defaults to "docker"
 
 [docker.uses]
