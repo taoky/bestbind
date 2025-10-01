@@ -47,7 +47,7 @@ impl FormatRunner for DockerFormatRunner {
     }
 
     fn run(&self, target: &str, tmp_path: &mktemp::Temp, log: &File) -> Box<Self::HandleType> {
-        let args = get_program_args(&self.program, &self.extra, &self.upstream, tmp_path, None);
+        let args = get_program_args(self.program, &self.extra, &self.upstream, tmp_path, None);
         let cmd = std::process::Command::new(&self.docker)
             .arg("run")
             .arg("--rm")
@@ -78,7 +78,7 @@ impl FormatRunnerFactory for DockerFormatRunner {
         program: crate::Program,
     ) -> Box<dyn FormatRunner<HandleType = dyn Handle>> {
         let mut uses: Vec<Target> = Vec::new();
-        for (network, comment) in profile.uses.into_iter() {
+        for (network, comment) in profile.uses {
             uses.push(Target { network, comment });
         }
         let docker = profile.docker;
@@ -96,7 +96,7 @@ impl FormatRunnerFactory for DockerFormatRunner {
                 .status()
                 .expect("Failed to pull docker image");
         }
-        Box::new(DockerFormatRunner {
+        Box::new(Self {
             docker,
             uses,
             extra: args.extra.clone(),

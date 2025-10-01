@@ -52,12 +52,12 @@ You can download corresponding file from https://github.com/taoky/libbinder/rele
 }
 
 fn get_child(
-    program: &Program,
+    program: Program,
     bind_ip: &str,
     upstream: &str,
     tmp_path: &Path,
     log_file: &File,
-    binder: &Option<PathBuf>,
+    binder: Option<&PathBuf>,
     extra: &[String],
 ) -> ProgramChild {
     let mut cmd: Command;
@@ -102,7 +102,7 @@ fn get_child(
                 get_program_name(program)
             )
         }),
-        program: *program,
+        program,
     }
 }
 
@@ -162,7 +162,7 @@ fn kill_children(proc: &mut ProgramChild) -> ExitStatus {
         // Still not exited, kill it
         println!(
             "Killing {} with SIGKILL, as it is not exiting with SIGTERM.",
-            get_program_name(&proc.program)
+            get_program_name(proc.program)
         );
         unsafe {
             libc::kill(proc.child.id() as i32, SIGKILL);
@@ -204,12 +204,12 @@ impl FormatRunner for IPFormatRunner {
     fn run(&self, target: &str, tmp_path: &mktemp::Temp, log: &File) -> Box<Self::HandleType> {
         Box::new(IPFormatHandle {
             child: get_child(
-                &self.program,
+                self.program,
                 target,
                 &self.upstream,
                 tmp_path,
                 log,
-                &self.binder_path,
+                self.binder_path.as_ref(),
                 &self.extra,
             ),
         })
@@ -237,7 +237,7 @@ impl FormatRunnerFactory for IPFormatRunner {
             None
         };
 
-        Box::new(IPFormatRunner {
+        Box::new(Self {
             uses,
             binder_path,
             extra: args.extra.clone(),

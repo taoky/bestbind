@@ -49,7 +49,7 @@ pub fn get_runner(
 }
 
 fn get_program_args(
-    program: &Program,
+    program: Program,
     extra: &[String],
     upstream: &str,
     tmp: &Path,

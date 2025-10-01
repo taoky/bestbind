@@ -1,3 +1,11 @@
+#![warn(clippy::all, clippy::pedantic, clippy::nursery)]
+#![allow(
+    clippy::cast_precision_loss,
+    clippy::if_not_else,
+    clippy::case_sensitive_file_extension_comparisons,
+    clippy::cast_possible_wrap
+)]
+
 use std::{
     collections::HashMap,
     fs::File,
@@ -32,12 +40,12 @@ enum Program {
 impl std::fmt::Display for Program {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
-            Program::Rsync => "rsync",
-            Program::Wget => "wget",
-            Program::Curl => "curl",
-            Program::Git => "git",
+            Self::Rsync => "rsync",
+            Self::Wget => "wget",
+            Self::Curl => "curl",
+            Self::Git => "git",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -48,18 +56,17 @@ enum Format {
 }
 
 impl<'de> Deserialize<'de> for Format {
-    fn deserialize<D>(deserializer: D) -> Result<Format, D::Error>
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
         let s: String = Deserialize::deserialize(deserializer)?;
         let s = s.to_lowercase();
         match s.as_str() {
-            "ip" => Ok(Format::IP),
-            "docker" => Ok(Format::Docker),
+            "ip" => Ok(Self::IP),
+            "docker" => Ok(Self::Docker),
             _ => Err(serde::de::Error::custom(format!(
-                "Unknown format: {}. Supported formats: ip, docker",
-                s
+                "Unknown format: {s}. Supported formats: ip, docker"
             ))),
         }
     }
@@ -100,7 +107,7 @@ struct Args {
     #[clap(short, long, default_value = "30")]
     timeout: usize,
 
-    /// Tmp file path. Default to env::temp_dir() (/tmp in Linux system)
+    /// Tmp file path. Default to `env::temp_dir()`` (/tmp in Linux system)
     #[clap(long)]
     tmp_dir: Option<String>,
 
@@ -135,7 +142,7 @@ struct Target {
 }
 
 #[inline]
-fn get_program_name(program: &Program) -> String {
+fn get_program_name(program: Program) -> String {
     match program {
         Program::Rsync => "rsync",
         Program::Wget => "wget",
@@ -145,7 +152,7 @@ fn get_program_name(program: &Program) -> String {
     .to_owned()
 }
 
-fn create_tmp_file(tmp_dir: &Option<String>) -> mktemp::Temp {
+fn create_tmp_file(tmp_dir: Option<&String>) -> mktemp::Temp {
     match tmp_dir {
         Some(tmp_dir) => mktemp::Temp::new_file_in(tmp_dir),
         None => mktemp::Temp::new_file(),
@@ -153,7 +160,7 @@ fn create_tmp_file(tmp_dir: &Option<String>) -> mktemp::Temp {
     .expect("tmp file created failed")
 }
 
-fn create_tmp_dir(tmp_dir: &Option<String>) -> mktemp::Temp {
+fn create_tmp_dir(tmp_dir: Option<&String>) -> mktemp::Temp {
     match tmp_dir {
         Some(tmp_dir) => mktemp::Temp::new_dir_in(tmp_dir),
         None => mktemp::Temp::new_dir(),
@@ -190,8 +197,8 @@ fn get_config_paths(args: &Args) -> Vec<PathBuf> {
     }
 }
 
-fn get_profile(args: &Args, config: String) -> Result<Profile> {
-    let profiles: HashMap<String, Profile> = toml::from_str(&config)?;
+fn get_profile(args: &Args, config: &str) -> Result<Profile> {
+    let profiles: HashMap<String, Profile> = toml::from_str(config)?;
     match profiles.get(&args.profile) {
         Some(profile) => {
             if profile.format == Format::Docker && profile.image.is_empty() {
@@ -228,22 +235,19 @@ fn main() {
                 break;
             }
             Err(e) => {
-                error_msgs.push(format!("Tried: {:?}, got error: {}", config, e));
+                error_msgs.push(format!("Tried: {config:?}, got error: {e}"));
             }
         }
     }
-    let mut config_file = match config_file {
-        Some(config_file) => config_file,
-        None => {
-            panic!("Cannot open IP list file. {}", error_msgs.join("\n"));
-        }
+    let Some(mut config_file) = config_file else {
+        panic!("Cannot open config file. {}", error_msgs.join("\n"));
     };
     let mut full_config: String = String::new();
     config_file
         .read_to_string(&mut full_config)
         .expect("Cannot read config file");
     let profile =
-        get_profile(&args, full_config).expect("Cannot parse config file or profile not found");
+        get_profile(&args, &full_config).expect("Cannot parse config file or profile not found");
 
     // 2. Detect which program should we run
     let program = match args.program {
@@ -269,12 +273,12 @@ fn main() {
         }
     };
 
-    let runner = get_runner(profile.format, &args, profile.clone(), program);
+    let runner = get_runner(profile.format, &args, profile, program);
     let uses = runner.uses();
 
     let mut results: Vec<Vec<_>> = Vec::new();
     for pass in 0..args.pass {
-        println!("Pass {}:", pass);
+        println!("Pass {pass}:");
         let mut results_pass: Vec<_> = Vec::new();
         for target in uses {
             if term.load(Ordering::SeqCst) {
@@ -284,9 +288,9 @@ fn main() {
             }
             // create tmp file or directory
             let tmp_file = if program != Program::Git {
-                create_tmp_file(&args.tmp_dir)
+                create_tmp_file(args.tmp_dir.as_ref())
             } else {
-                create_tmp_dir(&args.tmp_dir)
+                create_tmp_dir(args.tmp_dir.as_ref())
             };
             let mut proc = runner.run(&target.network, &tmp_file, &log);
             let prog_status =
@@ -296,18 +300,18 @@ fn main() {
             let duration_seconds = duration.as_secs_f64();
             let mut state_str = {
                 if duration_seconds > args.timeout as f64 {
-                    format!("✅ {} timeout as expected", get_program_name(&program))
+                    format!("✅ {} timeout as expected", get_program_name(program))
                 } else {
                     match status.code() {
                         Some(code) => match code {
                             0 => "✅ OK".to_owned(),
                             _ => format!(
                                 "❌ {} failed with code {}",
-                                get_program_name(&program),
+                                get_program_name(program),
                                 code
                             ),
                         },
-                        None => format!("❌ {} killed by signal", get_program_name(&program)),
+                        None => format!("❌ {} killed by signal", get_program_name(program)),
                     }
                 }
             };
@@ -315,7 +319,7 @@ fn main() {
                 state_str += " (terminated by user)";
             }
             // check file size
-            let size = if program != Program::Git {
+            let size = if program == Program::Git {
                 tmp_file.metadata().unwrap().len()
             } else {
                 fs_extra::dir::get_size(&tmp_file).unwrap()
@@ -355,6 +359,6 @@ fn main() {
     println!("Final Results (remove min and max if feasible, and take average):");
     calculated_results.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap());
     for (ip, comment, res) in calculated_results {
-        println!("{} ({}): {} KB/s", ip, comment, res);
+        println!("{ip} ({comment}): {res} KB/s");
     }
 }
