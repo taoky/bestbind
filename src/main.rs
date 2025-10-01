@@ -29,6 +29,18 @@ enum Program {
     Git,
 }
 
+impl std::fmt::Display for Program {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            Program::Rsync => "rsync",
+            Program::Wget => "wget",
+            Program::Curl => "curl",
+            Program::Git => "git",
+        };
+        write!(f, "{}", s)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Format {
     IP,
@@ -64,7 +76,7 @@ struct Profile {
     image: String, // Docker image name, only used in Docker format
     #[serde(default = "default_docker")]
     docker: String, // The "Docker" command, default to "docker".
-                    // A possible alternative is "podman"
+    // A possible alternative is "podman"
     uses: HashMap<String, String>, // IP or Docker network => comment
 }
 
@@ -93,6 +105,7 @@ struct Args {
     tmp_dir: Option<String>,
 
     /// Log file. Default to /dev/null
+    /// When speedtesting, the executed program output is redirected to this file.
     #[clap(long, default_value = "/dev/null")]
     log: String,
 
@@ -181,7 +194,7 @@ fn get_profile(args: &Args, config: String) -> Result<Profile> {
     let profiles: HashMap<String, Profile> = toml::from_str(&config)?;
     match profiles.get(&args.profile) {
         Some(profile) => {
-            if profile.format == Format::Docker && profile.image == "" {
+            if profile.format == Format::Docker && profile.image.is_empty() {
                 return Err(anyhow::anyhow!(
                     "Docker format requires 'image' field in profile"
                 ));

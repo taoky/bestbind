@@ -1,23 +1,19 @@
 /// Run in host environment, directly bind with IP address
 use std::{
-    cmp::min,
     fs::File,
     net,
     os::unix::process::CommandExt,
     path::{Path, PathBuf},
     process::{Command, ExitStatus, Stdio},
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-    time::{Duration, Instant},
+    sync::{atomic::AtomicBool, Arc},
+    time::Duration,
 };
 
 use libc::{SIGKILL, SIGTERM};
 
 use crate::{
-    format::{FormatRunner, FormatRunnerFactory, Handle},
-    get_program_name, Program, ProgramChild, ProgramStatus, Target,
+    format::{get_program_args, wait_timeout, FormatRunner, FormatRunnerFactory, Handle},
+    get_program_name, Program, ProgramChild, Target,
 };
 
 fn get_binder_path() -> Option<PathBuf> {
@@ -62,49 +58,29 @@ fn get_child(
     tmp_path: &Path,
     log_file: &File,
     binder: &Option<PathBuf>,
-    extra: &Vec<String>,
+    extra: &[String],
 ) -> ProgramChild {
-    let tmp = tmp_path.as_os_str().to_string_lossy().to_string();
     let mut cmd: Command;
+    let args = get_program_args(program, extra, upstream, tmp_path, Some(bind_ip));
     ProgramChild {
         child: match program {
             Program::Rsync => {
                 cmd = std::process::Command::new("rsync");
-                cmd.arg("-vP")
-                    .arg("-rLptgoD")
-                    .arg("--inplace")
-                    .arg("--address")
-                    .arg(bind_ip)
-                    .arg(upstream)
-                    .arg(tmp)
-                    .args(extra)
+                cmd.args(args)
             }
             Program::Curl => {
                 cmd = std::process::Command::new("curl");
-                cmd.arg("-o")
-                    .arg(tmp)
-                    .arg("--interface")
-                    .arg(bind_ip)
-                    .arg(upstream)
-                    .args(extra)
+                cmd.args(args)
             }
             Program::Wget => {
                 cmd = std::process::Command::new("wget");
-                cmd.arg("-O")
-                    .arg(tmp)
-                    .arg("--bind-address")
-                    .arg(bind_ip)
-                    .arg(upstream)
-                    .args(extra)
+                cmd.args(args)
             }
             Program::Git => {
                 cmd = std::process::Command::new("git");
                 cmd.env("LD_PRELOAD", binder.clone().unwrap())
                     .env("BIND_ADDRESS", bind_ip)
-                    .arg("clone")
-                    .arg("--bare")
-                    .arg(upstream)
-                    .arg(tmp)
+                    .args(args)
             }
         }
         .stdin(Stdio::null())
@@ -214,48 +190,7 @@ pub struct IPFormatHandle {
 
 impl Handle for IPFormatHandle {
     fn wait_timeout(&mut self, timeout: Duration, term: Arc<AtomicBool>) -> crate::ProgramStatus {
-        // Reference adaptable timeout algorithm from
-        // https://github.com/hniksic/rust-subprocess/blob/5e89ac093f378bcfc03c69bdb1b4bcacf4313ce4/src/popen.rs#L778
-        // Licensed under MIT & Apache-2.0
-
-        let start = Instant::now();
-        let deadline = start + timeout;
-
-        let mut delay = Duration::from_millis(1);
-        let proc = &mut self.child;
-
-        loop {
-            let status = proc
-                .child
-                .try_wait()
-                .expect("try waiting for child process failed");
-            match status {
-                Some(status) => {
-                    return ProgramStatus {
-                        status,
-                        time: start.elapsed(),
-                    }
-                }
-                None => {
-                    if term.load(Ordering::SeqCst) {
-                        let time = start.elapsed();
-                        let status = kill_children(proc);
-                        return ProgramStatus { status, time };
-                    }
-
-                    let now = Instant::now();
-                    if now >= deadline {
-                        let time = start.elapsed();
-                        let status = kill_children(proc);
-                        return ProgramStatus { status, time };
-                    }
-
-                    let remaining = deadline.duration_since(now);
-                    std::thread::sleep(min(delay, remaining));
-                    delay = min(delay * 2, Duration::from_millis(100));
-                }
-            }
-        }
+        wait_timeout(&mut self.child, timeout, term, kill_children)
     }
 }
 
@@ -266,13 +201,13 @@ impl FormatRunner for IPFormatRunner {
         &self.uses
     }
 
-    fn run(&self, target: &str, tmp_file: &mktemp::Temp, log: &File) -> Box<Self::HandleType> {
+    fn run(&self, target: &str, tmp_path: &mktemp::Temp, log: &File) -> Box<Self::HandleType> {
         Box::new(IPFormatHandle {
             child: get_child(
                 &self.program,
                 target,
                 &self.upstream,
-                tmp_file,
+                tmp_path,
                 log,
                 &self.binder_path,
                 &self.extra,
@@ -290,7 +225,10 @@ impl FormatRunnerFactory for IPFormatRunner {
         let mut uses: Vec<Target> = Vec::new();
         for (ip, comment) in profile.uses {
             let _ = ip.parse::<net::IpAddr>().expect("Invalid IP address");
-            uses.push(Target { network: ip, comment });
+            uses.push(Target {
+                network: ip,
+                comment,
+            });
         }
 
         let binder_path = if program == Program::Git {
