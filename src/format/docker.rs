@@ -78,6 +78,7 @@ impl FormatRunner for DockerFormatRunner {
                 .map(char::from)
                 .collect::<String>()
         );
+        let tmp = tmp_path.as_os_str().to_string_lossy();
         let cmd = std::process::Command::new(&self.docker)
             .arg("run")
             .arg("--name")
@@ -86,7 +87,7 @@ impl FormatRunner for DockerFormatRunner {
             .arg("--network")
             .arg(target)
             .arg("-v")
-            .arg(format!("{}:/data", tmp_path.as_os_str().to_string_lossy()))
+            .arg(format!("{tmp}:{tmp}"))
             .arg(&self.image)
             .arg(self.program.to_string())
             .args(args)
