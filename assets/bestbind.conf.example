@@ -4,3 +4,12 @@ format = "ip"
 [default.uses]
 "192.168.1.2" = "eth0"
 "1.2.3.4" = "example"
+
+[docker]
+format = "docker"
+image = "ghcr.io/taoky/bestbind-env:latest"
+docker = "podman" # Optional, defaults to "docker"
+
+[docker.uses]
+"bridge" = "default docker bridge"
+"some_network" = "a user-defined docker network"

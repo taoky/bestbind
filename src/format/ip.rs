@@ -62,11 +62,9 @@ fn get_child(
     tmp_path: &Path,
     log_file: &File,
     binder: &Option<PathBuf>,
-    extra: &Option<String>,
+    extra: &Vec<String>,
 ) -> ProgramChild {
     let tmp = tmp_path.as_os_str().to_string_lossy().to_string();
-    let extra = shlex::split(extra.as_ref().unwrap_or(&"".to_string()))
-        .expect("Failed to parse extra arguments");
     let mut cmd: Command;
     ProgramChild {
         child: match program {
@@ -205,7 +203,7 @@ fn kill_children(proc: &mut ProgramChild) -> ExitStatus {
 pub struct IPFormatRunner {
     uses: Vec<Target>,
     binder_path: Option<PathBuf>,
-    extra: Option<String>,
+    extra: Vec<String>,
     program: Program,
     upstream: String,
 }
@@ -292,7 +290,7 @@ impl FormatRunnerFactory for IPFormatRunner {
         let mut uses: Vec<Target> = Vec::new();
         for (ip, comment) in profile.uses {
             let _ = ip.parse::<net::IpAddr>().expect("Invalid IP address");
-            uses.push(Target { ip, comment });
+            uses.push(Target { network: ip, comment });
         }
 
         let binder_path = if program == Program::Git {

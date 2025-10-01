@@ -29,7 +29,7 @@ enum Program {
     Git,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 enum Format {
     IP,
     Docker,
@@ -53,9 +53,18 @@ impl<'de> Deserialize<'de> for Format {
     }
 }
 
+fn default_docker() -> String {
+    "docker".to_string()
+}
+
 #[derive(Debug, Deserialize, Clone)]
 struct Profile {
     format: Format,
+    #[serde(default)]
+    image: String, // Docker image name, only used in Docker format
+    #[serde(default = "default_docker")]
+    docker: String, // The "Docker" command, default to "docker".
+                    // A possible alternative is "podman"
     uses: HashMap<String, String>, // IP or Docker network => comment
 }
 
@@ -96,12 +105,19 @@ struct Args {
     program: Option<Program>,
 
     /// Extra arguments. Will be given to specified program
-    #[clap(long, allow_hyphen_values = true)]
-    extra: Option<String>,
+    #[clap(long, allow_hyphen_values = true, value_parser = parse_extra)]
+    extra: Vec<String>,
+}
+
+fn parse_extra(extra: &str) -> Result<Vec<String>, String> {
+    match shlex::split(extra) {
+        Some(v) => Ok(v),
+        None => Err("Failed to parse extra arguments".to_string()),
+    }
 }
 
 struct Target {
-    ip: String,
+    network: String,
     comment: String,
 }
 
@@ -164,7 +180,14 @@ fn get_config_paths(args: &Args) -> Vec<PathBuf> {
 fn get_profile(args: &Args, config: String) -> Result<Profile> {
     let profiles: HashMap<String, Profile> = toml::from_str(&config)?;
     match profiles.get(&args.profile) {
-        Some(profile) => Ok(profile.clone()),
+        Some(profile) => {
+            if profile.format == Format::Docker && profile.image == "" {
+                return Err(anyhow::anyhow!(
+                    "Docker format requires 'image' field in profile"
+                ));
+            }
+            Ok(profile.clone())
+        }
         None => Err(anyhow::anyhow!(
             "Profile '{}' not found in config file",
             args.profile
@@ -252,7 +275,7 @@ fn main() {
             } else {
                 create_tmp_dir(&args.tmp_dir)
             };
-            let mut proc = runner.run(&target.ip, &tmp_file, &log);
+            let mut proc = runner.run(&target.network, &tmp_file, &log);
             let prog_status =
                 proc.wait_timeout(Duration::from_secs(args.timeout as u64), term.clone());
             let status = prog_status.status;
@@ -288,7 +311,7 @@ fn main() {
             let bandwidth = bandwidth / 1024_f64; // KB/s
             println!(
                 "{} ({}): {} KB/s ({})",
-                target.ip, target.comment, bandwidth, state_str
+                target.network, target.comment, bandwidth, state_str
             );
             results_pass.push(bandwidth);
         }
@@ -313,7 +336,7 @@ fn main() {
         } else {
             sum / args.pass as f64
         };
-        calculated_results.push((ip.ip.clone(), ip.comment.clone(), res));
+        calculated_results.push((ip.network.clone(), ip.comment.clone(), res));
     }
 
     println!("Final Results (remove min and max if feasible, and take average):");

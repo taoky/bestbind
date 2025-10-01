@@ -5,12 +5,16 @@ use std::{
 };
 
 /// Run with docker, by specifying docker network
-use crate::{format::{FormatRunner, FormatRunnerFactory, Handle}, Target};
+use crate::{
+    format::{FormatRunner, FormatRunnerFactory, Handle},
+    Target,
+};
 
 pub struct DockerFormatHandle;
 pub struct DockerFormatRunner {
+    docker: String,
     uses: Vec<crate::Target>,
-    extra: Option<String>,
+    extra: Vec<String>,
     program: crate::Program,
     upstream: String,
 }
@@ -40,10 +44,25 @@ impl FormatRunnerFactory for DockerFormatRunner {
         program: crate::Program,
     ) -> Box<dyn FormatRunner<HandleType = dyn Handle>> {
         let mut uses: Vec<Target> = Vec::new();
-        for (ip, comment) in profile.uses.into_iter() {
-            uses.push(Target { ip, comment });
+        for (network, comment) in profile.uses.into_iter() {
+            uses.push(Target { network, comment });
+        }
+        let docker = profile.docker;
+        // Check if an image exists
+        if let Err(e) = std::process::Command::new(&docker)
+            .args(&["image", "inspect", &profile.image])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null()).status()
+        {
+            println!("Failed to inspect docker image {}: {}", &profile.image, e);
+            println!("Try pulling the image...");
+            std::process::Command::new(&docker)
+                .args(&["pull", &profile.image])
+                .status()
+                .expect("Failed to pull docker image");
         }
         Box::new(DockerFormatRunner {
+            docker,
             uses,
             extra: args.extra.clone(),
             program,
