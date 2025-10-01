@@ -3,7 +3,9 @@
     clippy::cast_precision_loss,
     clippy::if_not_else,
     clippy::case_sensitive_file_extension_comparisons,
-    clippy::cast_possible_wrap
+    clippy::cast_possible_wrap,
+    clippy::too_many_lines,
+    clippy::option_if_let_else
 )]
 
 use std::{
@@ -107,7 +109,7 @@ struct Args {
     #[clap(short, long, default_value = "30")]
     timeout: usize,
 
-    /// Tmp file path. Default to `env::temp_dir()`` (/tmp in Linux system)
+    /// Tmp file path. Default to `env::temp_dir()` (/tmp in Linux system)
     #[clap(long)]
     tmp_dir: Option<String>,
 
@@ -130,10 +132,7 @@ struct Args {
 }
 
 fn parse_extra(extra: &str) -> Result<Vec<String>, String> {
-    match shlex::split(extra) {
-        Some(v) => Ok(v),
-        None => Err("Failed to parse extra arguments".to_string()),
-    }
+    shlex::split(extra).map_or_else(|| Err("Failed to parse extra arguments".to_string()), Ok)
 }
 
 struct Target {
@@ -153,19 +152,19 @@ fn get_program_name(program: Program) -> String {
 }
 
 fn create_tmp_file(tmp_dir: Option<&String>) -> mktemp::Temp {
-    match tmp_dir {
-        Some(tmp_dir) => mktemp::Temp::new_file_in(tmp_dir),
-        None => mktemp::Temp::new_file(),
-    }
-    .expect("tmp file created failed")
+    tmp_dir
+        .map_or_else(mktemp::Temp::new_file, |tmp_dir| {
+            mktemp::Temp::new_file_in(tmp_dir)
+        })
+        .expect("tmp file created failed")
 }
 
 fn create_tmp_dir(tmp_dir: Option<&String>) -> mktemp::Temp {
-    match tmp_dir {
-        Some(tmp_dir) => mktemp::Temp::new_dir_in(tmp_dir),
-        None => mktemp::Temp::new_dir(),
-    }
-    .expect("tmp dir created failed")
+    tmp_dir
+        .map_or_else(mktemp::Temp::new_dir, |tmp_dir| {
+            mktemp::Temp::new_dir_in(tmp_dir)
+        })
+        .expect("tmp dir created failed")
 }
 
 struct ProgramStatus {
@@ -224,8 +223,6 @@ fn main() {
     signal_hook::flag::register(SIGTERM, Arc::clone(&term))
         .expect("Register SIGTERM handler failed");
 
-    // 1. read IP list from args.config
-
     let mut config_file = None;
     let mut error_msgs = Vec::new();
     for config in config_paths {
@@ -235,7 +232,7 @@ fn main() {
                 break;
             }
             Err(e) => {
-                error_msgs.push(format!("Tried: {config:?}, got error: {e}"));
+                error_msgs.push(format!("Tried: {}, got error: {e}", config.display()));
             }
         }
     }
@@ -249,27 +246,25 @@ fn main() {
     let profile =
         get_profile(&args, &full_config).expect("Cannot parse config file or profile not found");
 
-    // 2. Detect which program should we run
-    let program = match args.program {
-        Some(program) => program,
-        None => {
-            // We need to detect by upstream
+    let program = if let Some(program) = args.program {
+        program
+    } else {
+        // We need to detect by upstream
 
-            // Though I don't think anyone will use ALL UPPERCASE here...
-            let upstream = args.upstream.to_lowercase();
-            if upstream.starts_with("rsync://") || upstream.contains("::") {
-                Program::Rsync
-            } else if upstream.starts_with("http://") || upstream.starts_with("https://") {
-                if upstream.ends_with(".git") {
-                    Program::Git
-                } else {
-                    Program::Curl
-                }
-            } else if upstream.starts_with("git://") {
+        // Though I don't think anyone will use ALL UPPERCASE here...
+        let upstream = args.upstream.to_lowercase();
+        if upstream.starts_with("rsync://") || upstream.contains("::") {
+            Program::Rsync
+        } else if upstream.starts_with("http://") || upstream.starts_with("https://") {
+            if upstream.ends_with(".git") {
                 Program::Git
             } else {
-                panic!("Cannot detect upstream program. Please specify with --program.")
+                Program::Curl
             }
+        } else if upstream.starts_with("git://") {
+            Program::Git
+        } else {
+            panic!("Cannot detect upstream program. Please specify with --program.")
         }
     };
 

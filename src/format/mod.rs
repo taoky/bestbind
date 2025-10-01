@@ -105,7 +105,7 @@ fn get_program_args(
 fn wait_timeout(
     proc: &mut ProgramChild,
     timeout: Duration,
-    term: Arc<AtomicBool>,
+    term: &Arc<AtomicBool>,
     kill: fn(&mut ProgramChild) -> ExitStatus,
 ) -> crate::ProgramStatus {
     // Reference adaptable timeout algorithm from
@@ -122,31 +122,28 @@ fn wait_timeout(
             .child
             .try_wait()
             .expect("try waiting for child process failed");
-        match status {
-            Some(status) => {
-                return ProgramStatus {
-                    status,
-                    time: start.elapsed(),
-                }
-            }
-            None => {
-                if term.load(Ordering::SeqCst) {
-                    let time = start.elapsed();
-                    let status = kill(proc);
-                    return ProgramStatus { status, time };
-                }
-
-                let now = Instant::now();
-                if now >= deadline {
-                    let time = start.elapsed();
-                    let status = kill(proc);
-                    return ProgramStatus { status, time };
-                }
-
-                let remaining = deadline.duration_since(now);
-                std::thread::sleep(min(delay, remaining));
-                delay = min(delay * 2, Duration::from_millis(100));
-            }
+        if let Some(status) = status {
+            return ProgramStatus {
+                status,
+                time: start.elapsed(),
+            };
         }
+
+        if term.load(Ordering::SeqCst) {
+            let time = start.elapsed();
+            let status = kill(proc);
+            return ProgramStatus { status, time };
+        }
+
+        let now = Instant::now();
+        if now >= deadline {
+            let time = start.elapsed();
+            let status = kill(proc);
+            return ProgramStatus { status, time };
+        }
+
+        let remaining = deadline.duration_since(now);
+        std::thread::sleep(min(delay, remaining));
+        delay = min(delay * 2, Duration::from_millis(100));
     }
 }

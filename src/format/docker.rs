@@ -35,7 +35,7 @@ fn kill_container(child: &mut ProgramChild) -> ExitStatus {
 
 impl Handle for DockerFormatHandle {
     fn wait_timeout(&mut self, timeout: Duration, term: Arc<AtomicBool>) -> crate::ProgramStatus {
-        wait_timeout(&mut self.child, timeout, term, kill_container)
+        wait_timeout(&mut self.child, timeout, &term, kill_container)
     }
 }
 

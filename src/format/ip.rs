@@ -16,39 +16,33 @@ use crate::{
     get_program_name, Program, ProgramChild, Target,
 };
 
-fn get_binder_path() -> Option<PathBuf> {
+fn get_binder_path() -> PathBuf {
     const CANONICALIZE_ERR_MSG: &str = "Failed to canonicalize libbinder.so path";
     let self_file = Path::new("/proc/self/exe").canonicalize();
-    let libpath = match self_file {
-        Ok(self_file) => {
-            let libbinder = self_file.parent().unwrap().join("libbinder.so");
+    let libpath = self_file.map_or(None, |self_file| {
+        let libbinder = self_file.parent().unwrap().join("libbinder.so");
+        if !libbinder.exists() {
+            let libbinder = self_file
+                .parent()
+                .unwrap()
+                .join("deps")
+                .join("libbinder.so");
             if !libbinder.exists() {
-                let libbinder = self_file
-                    .parent()
-                    .unwrap()
-                    .join("deps")
-                    .join("libbinder.so");
-                if !libbinder.exists() {
-                    None
-                } else {
-                    Some(libbinder.canonicalize().expect(CANONICALIZE_ERR_MSG))
-                }
+                None
             } else {
                 Some(libbinder.canonicalize().expect(CANONICALIZE_ERR_MSG))
             }
+        } else {
+            Some(libbinder.canonicalize().expect(CANONICALIZE_ERR_MSG))
         }
-        Err(_) => None,
+    });
+    let Some(libpath) = libpath else {
+        panic!(
+            r"libbinder.so not found. Please put it in same folder of bestbind.
+You can download corresponding file from https://github.com/taoky/libbinder/releases"
+        );
     };
-    let libpath = match libpath {
-        Some(libpath) => libpath,
-        None => {
-            panic!(
-                r#"libbinder.so not found. Please put it in same folder of bestbind.
-You can download corresponding file from https://github.com/taoky/libbinder/releases"#
-            );
-        }
-    };
-    Some(libpath)
+    libpath
 }
 
 fn get_child(
@@ -78,7 +72,7 @@ fn get_child(
             }
             Program::Git => {
                 cmd = std::process::Command::new("git");
-                cmd.env("LD_PRELOAD", binder.clone().unwrap())
+                cmd.env("LD_PRELOAD", binder.unwrap())
                     .env("BIND_ADDRESS", bind_ip)
                     .args(args)
             }
@@ -190,7 +184,7 @@ pub struct IPFormatHandle {
 
 impl Handle for IPFormatHandle {
     fn wait_timeout(&mut self, timeout: Duration, term: Arc<AtomicBool>) -> crate::ProgramStatus {
-        wait_timeout(&mut self.child, timeout, term, kill_children)
+        wait_timeout(&mut self.child, timeout, &term, kill_children)
     }
 }
 
@@ -232,7 +226,7 @@ impl FormatRunnerFactory for IPFormatRunner {
         }
 
         let binder_path = if program == Program::Git {
-            get_binder_path()
+            Some(get_binder_path())
         } else {
             None
         };
