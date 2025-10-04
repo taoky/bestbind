@@ -1,0 +1,7 @@
+Package: bestbind
+Version: 0.4.0
+Section: utils
+Priority: optional
+Architecture: amd64
+Maintainer: taoky <me@taoky.moe>
+Description: A simple speedtest program for multiple-IPs (ISP) environment, to optimize the speed of syncing from upstream.

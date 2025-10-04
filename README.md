@@ -36,8 +36,8 @@ OPTIONS:
 
 `libbinder.so` will be searched by this order:
 
-- Same path as bestbind executable
-- `deps` directory in bestbind executable's parent directory
+- `/usr/lib/bestbind/libbinder.so`
+- The path `LIBBINDER_PATH` env var points to
 
 Note that libbinder is now seperated to another repo: <https://github.com/taoky/libbinder>, with glibc & musl support.
 

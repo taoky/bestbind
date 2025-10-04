@@ -17,31 +17,24 @@ use crate::{
 };
 
 fn get_binder_path() -> PathBuf {
-    const CANONICALIZE_ERR_MSG: &str = "Failed to canonicalize libbinder.so path";
-    let self_file = Path::new("/proc/self/exe").canonicalize();
-    let libpath = self_file.map_or(None, |self_file| {
-        let libbinder = self_file.parent().unwrap().join("libbinder.so");
-        if !libbinder.exists() {
-            let libbinder = self_file
-                .parent()
-                .unwrap()
-                .join("deps")
-                .join("libbinder.so");
-            if !libbinder.exists() {
-                None
-            } else {
-                Some(libbinder.canonicalize().expect(CANONICALIZE_ERR_MSG))
-            }
+    let mut paths_to_check = vec!["/usr/lib/bestbind/libbinder.so".to_string()];
+    if let Ok(env_path) = std::env::var("LIBBINDER_PATH") {
+        paths_to_check.push(env_path);
+    }
+
+    let libpath = paths_to_check.iter().find_map(|p| {
+        let path = Path::new(p);
+        if path.exists() {
+            Some(path.to_path_buf())
         } else {
-            Some(libbinder.canonicalize().expect(CANONICALIZE_ERR_MSG))
+            None
         }
-    });
-    let Some(libpath) = libpath else {
+    }).unwrap_or_else(|| {
         panic!(
-            r"libbinder.so not found. Please put it in same folder of bestbind.
+            r"libbinder.so not found. Please put it in /usr/lib/bestbind/ or set LIBBINDER_PATH environment variable.
 You can download corresponding file from https://github.com/taoky/libbinder/releases"
-        );
-    };
+        )
+    });
     libpath
 }
 
