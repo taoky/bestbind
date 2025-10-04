@@ -2,34 +2,32 @@
 
 (Old name: admirror-speedtest, rsync-speedtest)
 
-A simple speedtest program for multiple-IPs (ISP) environment, to optimize the speed of syncing from upstream. **Supports rsync, curl, wget and git**.
+A simple speedtest program for multiple-IPs (ISP) environment, to optimize the speed of syncing from upstream. **Supports rsync, curl, wget and git; you can also test with Docker/Podman networks**.
 
 PS: There's a racing bug in rsync that prevents proper termination of rsync processes, and it has been workarounded in rsync-speedtest. See comments of [`kill_children()` in main.rs](src/main.rs) for details.
 
 ## Args
 
-```
+```console
 $ ./bestbind --help
-bestbind 0.4.0
-Test speed (bandwidth) of different bind IP to rsync, http(s) and git upstream. Alleviate mirror
-site admin's trouble choosing fastest bind IP.
+Test speed (bandwidth) of different bind IP to rsync, http(s) and git upstream. Alleviate mirror site admin's trouble choosing fastest bind IP.
 
-USAGE:
-    bestbind [OPTIONS] <UPSTREAM>
+Usage: bestbind [OPTIONS] <UPSTREAM>
 
-ARGS:
-    <UPSTREAM>    Upstream path. Will be given to specified program
+Arguments:
+  <UPSTREAM>  Upstream path. Will be given to specified program
 
-OPTIONS:
-    -c, --config <CONFIG>      Config file (IP list) path. Default order: ~/.bestbind.conf or /etc/bestbind.conf
-    -h, --help                 Print help information
-        --log <LOG>            Log file. Default to /dev/null
-    -p, --pass <PASS>          Passes number [default: 3]
-        --program <PROGRAM>    Program to use. It will try to detect by default (here curl will be
-                               used default for http(s)) [possible values: rsync, wget, curl, git]
-    -t, --timeout <TIMEOUT>    Timeout (seconds) [default: 30]
-        --tmp-dir <TMP_DIR>    Tmp file path. Default to env::temp_dir() (/tmp in Linux system)
-    -V, --version              Print version information
+Options:
+      --profile <PROFILE>  Profile name in config file. If not given, it will use "default" profile [default: default]
+  -c, --config <CONFIG>    Config file (IP list) path. Select order is bestbind.conf in XDG config, then ~/.bestbind.conf, then /etc/bestbind.conf
+  -p, --pass <PASS>        Passes number [default: 3]
+  -t, --timeout <TIMEOUT>  Timeout (seconds) [default: 30]
+      --tmp-dir <TMP_DIR>  Tmp file path. Default to `env::temp_dir()` (/tmp in Linux system)
+      --log <LOG>          Log file. Default to /dev/null When speedtesting, the executed program output is redirected to this file [default: /dev/null]
+      --program <PROGRAM>  Program to use. It will try to detect by default (here curl will be used default for http(s)) [possible values: rsync, wget, curl, git]
+      --extra <EXTRA>      Extra arguments. Will be given to specified program
+  -h, --help               Print help
+  -V, --version            Print version
 ```
 
 ### Git support
@@ -45,10 +43,9 @@ It throws error and git support will not be available if `libbinder.so` is not f
 
 ## Config file format
 
-```
-114.5.1.4 example_ip_1
-2001:19:19:8::10 example_ip_2
-```
+Format from 0.4.0 is not compatible with previous versions.
+
+See [assets/bestbind.conf.example](assets/bestbind.conf.example) for example.
 
 ## Screenshot
 
