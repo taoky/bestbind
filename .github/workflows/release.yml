@@ -18,13 +18,15 @@ jobs:
     - name: Build with Docker
       run: |
         docker build -t local/bestbind .
-        CID=$(docker create local/bestbind)
+        CID=$(docker create local/bestbind /bestbind)
         docker cp ${CID}:/bestbind .
         docker cp ${CID}:/libbinder.so .
         docker rm ${CID}
 
     - name: Build Debian package
       run: |
+        mkdir -p deb/usr/lib/bestbind
+        mkdir -p deb/usr/bin
         cp libbinder.so deb/usr/lib/bestbind/
         cp bestbind deb/usr/bin/
         dpkg-deb --build deb bestbind.deb
