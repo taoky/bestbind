@@ -119,18 +119,25 @@ impl FormatRunnerFactory for DockerFormatRunner {
         }
         let docker = profile.docker;
         // Check if an image exists
-        if let Err(e) = std::process::Command::new(&docker)
+        let status = std::process::Command::new(&docker)
             .args(["image", "inspect", &profile.image])
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
             .status()
-        {
-            println!("Failed to inspect docker image {}: {}", &profile.image, e);
+            .expect("failed to inspect docker image");
+        if !status.success() {
+            println!("Failed to inspect docker image {}", &profile.image);
             println!("Try pulling the image...");
-            std::process::Command::new(&docker)
+            let status = std::process::Command::new(&docker)
                 .args(["pull", &profile.image])
                 .status()
                 .expect("Failed to pull docker image");
+            assert!(
+                status.success(),
+                "Failed to pull docker image {}, exit code: {}",
+                &profile.image,
+                status.code().unwrap_or(-1)
+            );
         }
         Box::new(Self {
             docker,
