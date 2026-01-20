@@ -31,6 +31,8 @@ use crate::format::get_runner;
 
 mod format;
 
+const MIN_TEST_FILE_BYTES: u64 = 1024 * 1024;
+
 #[derive(Debug, ValueEnum, Clone, Copy, PartialEq)]
 enum Program {
     Rsync,
@@ -316,6 +318,11 @@ fn main() {
             } else {
                 fs_extra::dir::get_size(&tmp_file).unwrap()
             };
+            if program != Program::Git && size < MIN_TEST_FILE_BYTES {
+                eprintln!(
+                    "WARNING: test file size ({size} bytes) is small; measured bandwidth may be too low."
+                );
+            }
             let bandwidth = size as f64 / duration_seconds; // Bytes / Seconds
             let bandwidth = bandwidth / 1024_f64; // KB/s
             println!(
