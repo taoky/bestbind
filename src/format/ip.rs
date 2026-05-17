@@ -57,7 +57,9 @@ fn get_child(
             }
             Program::RsyncSSL => {
                 cmd = std::process::Command::new("rsync-ssl");
-                cmd.args(args)
+                cmd.env("LD_PRELOAD", binder.unwrap())
+                    .env("BIND_ADDRESS", bind_ip)
+                    .args(args)
             }
             Program::Curl => {
                 cmd = std::process::Command::new("curl");
@@ -227,7 +229,7 @@ impl FormatRunnerFactory for IPFormatRunner {
             });
         }
 
-        let binder_path = if program == Program::Git {
+        let binder_path = if program == Program::Git || program == Program::RsyncSSL {
             Some(get_binder_path())
         } else {
             None
