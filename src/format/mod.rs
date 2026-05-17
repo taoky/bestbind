@@ -60,7 +60,7 @@ fn get_program_args(
     let tmp = tmp.as_os_str().to_string_lossy().to_string();
     let mut result = Vec::new();
     match program {
-        Program::Rsync => {
+        Program::Rsync | Program::RsyncSSL => {
             result.push("-vP".to_string());
             result.push("-rLptgoD".to_string());
             result.push("--inplace".to_string());

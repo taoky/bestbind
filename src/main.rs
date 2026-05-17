@@ -36,6 +36,7 @@ const MIN_TEST_FILE_BYTES: u64 = 1024 * 1024;
 #[derive(Debug, ValueEnum, Clone, Copy, PartialEq)]
 enum Program {
     Rsync,
+    RsyncSSL,
     Wget,
     Curl,
     Git,
@@ -45,6 +46,7 @@ impl std::fmt::Display for Program {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
             Self::Rsync => "rsync",
+            Self::RsyncSSL => "rsync-ssl",
             Self::Wget => "wget",
             Self::Curl => "curl",
             Self::Git => "git",
@@ -150,6 +152,7 @@ struct Target {
 fn get_program_name(program: Program) -> String {
     match program {
         Program::Rsync => "rsync",
+        Program::RsyncSSL => "rsync-ssl",
         Program::Wget => "wget",
         Program::Curl => "curl",
         Program::Git => "git",
@@ -214,7 +217,7 @@ fn get_profile(args: &Args, config: &str) -> Result<Profile> {
 }
 
 fn main() {
-    let args = Args::parse();
+    let mut args = Args::parse();
     let config_paths = get_config_paths(&args);
     let log = File::create(&args.log).expect("Cannot open log file");
     let term = Arc::new(AtomicBool::new(false));
@@ -252,7 +255,11 @@ fn main() {
 
         // Though I don't think anyone will use ALL UPPERCASE here...
         let upstream = args.upstream.to_lowercase();
-        if upstream.starts_with("rsync://") || upstream.contains("::") {
+        if upstream.starts_with("rsyncs://") {
+            // rsyncs is not a standard protocol -- for convenience only
+            args.upstream = args.upstream.replacen("rsyncs://", "rsync://", 1);
+            Program::RsyncSSL
+        } else if upstream.starts_with("rsync://") || upstream.contains("::") {
             Program::Rsync
         } else if upstream.starts_with("http://") || upstream.starts_with("https://") {
             if upstream.ends_with(".git") {

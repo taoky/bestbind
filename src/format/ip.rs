@@ -55,6 +55,10 @@ fn get_child(
                 cmd = std::process::Command::new("rsync");
                 cmd.args(args)
             }
+            Program::RsyncSSL => {
+                cmd = std::process::Command::new("rsync-ssl");
+                cmd.args(args)
+            }
             Program::Curl => {
                 cmd = std::process::Command::new("curl");
                 cmd.args(args)
